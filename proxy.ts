@@ -5,19 +5,19 @@ export function proxy(request: NextRequest) {
   const url = request.nextUrl;
 
   // Support domain
-  if (host.startsWith("support.")) {
+  if (host === "jbc-support.vercel.app") {
     url.pathname = `/support${url.pathname}`;
     return NextResponse.rewrite(url);
   }
 
   // Distributor domain
-  if (host.startsWith("distributor.")) {
+  if (host === "distributor.jimmyboss.com") {
     url.pathname = `/distributor${url.pathname}`;
     return NextResponse.rewrite(url);
   }
 
   // Launchgate domain
-  if (host.startsWith("launchgate.")) {
+  if (host === "launchgate.jimmyboss.com") {
     url.pathname = `/launchgate${url.pathname}`;
     return NextResponse.rewrite(url);
   }
