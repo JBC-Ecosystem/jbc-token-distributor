@@ -51,7 +51,7 @@ const TokenManagementComp: React.FC = () => {
     try {
       setDetectingToken(true);
 
-      const token = await detectToken(newToken.contractAddress);
+      const token = await detectToken(newToken.contractAddress, false);
 
       setNewToken({
         name: token.name,

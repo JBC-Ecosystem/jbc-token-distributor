@@ -11,8 +11,8 @@ export function proxy(request: NextRequest) {
   }
 
   // Distributor domain
-  if (host === "distributor.jimmyboss.com") {
-    url.pathname = `/distributor${url.pathname}`;
+  if (host === "jbc-token-distributor.vercel.app") {
+    url.pathname = `/dashboard${url.pathname}`;
     return NextResponse.rewrite(url);
   }
 

@@ -4,7 +4,6 @@ import { getBlockchain } from "./provider";
 
 import { getTokenContract } from "./token";
 import { mainnet_bsc, MINIMAL_BEP20_ABI, testnet_bsc } from "./detectToken";
-import { success } from "zod";
 
 const DISTRIBUTOR_ADDRESS = process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS;
 const DISTRIBUTOR_ABI = [
