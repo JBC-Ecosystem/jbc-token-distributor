@@ -1,0 +1,79 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Distribution {
+  id     String             @id @default(cuid())
+  status DistributionStatus @default(PENDING)
+
+  totalWallets Int
+  totalAmount  Decimal
+
+  tokenAddress String
+
+  createdAt DateTime @default(now())
+
+  items DistributionItem[]
+}
+
+model DistributionItem {
+  id String @id @default(cuid())
+
+  distributionId String
+
+  wallet String
+  amount Decimal
+
+  status ItemStatus @default(PENDING)
+
+  txHash       String?
+  errorMessage String?
+
+  distribution Distribution @relation(fields: [distributionId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Token {
+  id String @id @default(cuid())
+
+  name String
+
+  symbol String
+
+  contractAddress String @unique
+
+  decimals Int @default(18)
+
+  chainId Int
+
+  isActive Boolean @default(true)
+
+  tokenId String @unique
+
+  createdAt DateTime @default(now())
+}
+
+enum DistributionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ItemStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
