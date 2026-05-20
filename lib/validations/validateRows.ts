@@ -1,8 +1,6 @@
 import { ethers } from "ethers";
 import { ParsedRow } from "@/lib/parser/parserFile";
-import { prisma } from "../prisma";
 
-const SUPPORTED_TOKENS = ["USDT", "JBC"];
 
 
 export interface ValidatedRow extends ParsedRow {
@@ -26,7 +24,6 @@ export function validateRows(
   rows: ParsedRow[],
   SUPPORTED_TOKENS_ID: string
 ): ValidationSummary {
-  console.log(SUPPORTED_TOKENS_ID);
   const walletSet = new Set<string>();
 
   const validatedRows: ValidatedRow[] = [];

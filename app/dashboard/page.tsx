@@ -6,7 +6,6 @@ import {
   ValidationSummary,
 } from "@/lib/validations/validateRows";
 import { createBatches, DistributionBatch } from "@/lib/batch/createBatches";
-import WalletButton from "@/components/wallet/WalletButton";
 import {
   approveTokens,
   executeDistribution,
@@ -16,20 +15,26 @@ import {
 import { waitForTransaction } from "@/lib/blockchain/transactions";
 import { useWallet } from "@/hooks/useWallet";
 import { ethers } from "ethers";
+import { useRouter } from "next/navigation";
+import { set } from "zod";
 
 export default function DashboardPage() {
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedToken, setSelectedToken] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null); // Add this line
+  const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25); // Default to 25
+  const [internalPage, setInternalPage] = useState(0); // For scrolling within the batch
+  const router = useRouter();
 
   const [tokens, setTokens] = useState<any[]>([]);
   const [validation, setValidation] = useState<ValidationSummary | null>(null);
   const [batches, setBatches] = useState<DistributionBatch[]>([]);
+  const [batchesDup, setBatchesDup] = useState<DistributionBatch[]>([]); // For testing batch updates
   const [error, setError] = useState("");
   const [txLoading, setTxLoading] = useState(false);
   const [testnet, setTestnet] = useState(false);
-  const [senderAddress, setSenderAddress] = useState("");
   const { wallet, connect, disconnect } = useWallet();
 
   const [txHash, setTxHash] = useState("");
@@ -57,6 +62,7 @@ export default function DashboardPage() {
       const generatedBatches = createBatches(validationResult.validRows);
 
       setBatches(generatedBatches);
+      setBatchesDup(generatedBatches); // For testing batch updates
 
       console.log(parsedRows);
     } catch (err) {
@@ -88,12 +94,13 @@ export default function DashboardPage() {
 
       await waitForTransaction(approveTx);
       const address = wallet.connected ? wallet.address : "";
-      if(wallet.connected && !address) {
-        alert("Wallet connected but address not found. Please reconnect your wallet.");
+      if (wallet.connected && !address) {
+        alert(
+          "Wallet connected but address not found. Please reconnect your wallet.",
+        );
         setLoading(false);
         return;
       }
-
 
       const gas = await estimateDistributionGas(
         selectedToken.contractAddress,
@@ -121,46 +128,64 @@ export default function DashboardPage() {
     try {
       setTxLoading(true);
 
-      const recipients = validation?.validRows.map((r) => r.Wallet) || [];
-
-      const amounts = validation?.validRows.map((r) => r.Amount) || [];
-
       const totalAmount =
         validation?.validRows.reduce(
           (sum, row) => sum + Number(row.Amount),
           0,
         ) || 0;
 
-      // 1. Get signer from your provider (MetaMask/Browser)
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
 
-       const address = wallet.connected ? wallet.address : "";
-      if(wallet.connected && !address) {
-        alert("Wallet connected but address not found. Please reconnect your wallet.");
+      const senderAddress = wallet.connected ? wallet.address : "";
+      if (wallet.connected && !senderAddress) {
+        alert(
+          "Wallet connected but address not found. Please reconnect your wallet.",
+        );
         setLoading(false);
         return;
       }
 
-      // Execute
-      const distributionTx = await executeDistribution(
-        selectedToken.contractAddress,
-        recipients,
-        amounts,
-        signer,
-        selectedToken.decimals,
-        address as string,
-      );
+      // Loop through each prepared batch individually
+      for (const batch of batches) {
+        if (batch.status === "success") {
+          console.log(`Batch ${batch.batchId} already successful, skipping...`);
+          continue; // Skip already successful batches
+        }
+        batch.status = "processing";
+        router.refresh(); // Update UI to show processing status
+        setBatchesDup([...batchesDup]);
 
-      const receipt = await waitForTransaction(distributionTx);
+        // batch.recipients and batch.amounts are already sliced to your safe limit (e.g., 400)
+        const distributionTx = await executeDistribution(
+          selectedToken.contractAddress,
+          batch.recipients,
+          batch.amounts,
+          signer,
+          selectedToken.decimals,
+          senderAddress as string,
+          totalAmount.toString(), //total amounts for approval, not needed for distribution but can be used for logging or future features
+        );
+        batch.txHash = distributionTx.hash;
+        // Wait for this specific batch to clear before moving to the next one
+        const receipt = await waitForTransaction(distributionTx);
 
-      setTxHash(receipt.hash);
+        if (receipt.status === 1) {
+          batch.status = "success";
+        } else {
+          batch.status = "failed";
+        }
+        console.log(`Batch ${batch.batchId} completed. Hash: ${receipt.hash}`);
+        console.log(receipt);
+        router.refresh(); // Refresh the page to update batch statuses in the UI
+      }
 
-      alert("Distribution completed");
+      setBatchesDup([...batchesDup]);
+
+      alert("All batches distributed successfully!");
     } catch (error) {
       console.error(error);
-
-      alert("Distribution failed");
+      alert("Distribution failed during processing.");
     } finally {
       setTxLoading(false);
     }
@@ -171,6 +196,7 @@ export default function DashboardPage() {
     setRows([]);
     setValidation(null);
     setBatches([]);
+    setBatchesDup([]);
     setError("");
     setTxHash("");
     setGasInfo({
@@ -178,6 +204,8 @@ export default function DashboardPage() {
       bnb: "",
       usd: "",
     });
+    setInternalPage(0);
+    setCurrentBatchIndex(0);
 
     // 2. Clear the actual DOM element
     if (fileInputRef.current) {
@@ -186,6 +214,15 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Only trigger if a distribution or loading process is active
+      if (txLoading || loading || batches.length > 0) {
+        e.preventDefault();
+        e.returnValue = ""; // Standard way to trigger the browser prompt
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
 
     async function fetchTokens() {
       const response = await fetch("/api/tokens");
@@ -196,7 +233,10 @@ export default function DashboardPage() {
     }
 
     fetchTokens();
-  }, []);
+    // Reset internal page when changing batches or row limits
+    setInternalPage(0);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [txLoading, loading, batches.length, currentBatchIndex, rowsPerPage]);
 
   return (
     <div className="p-10 space-y-8">
@@ -292,6 +332,7 @@ export default function DashboardPage() {
               id="fileUpload"
               type="file"
               ref={fileInputRef}
+              disabled={!selectedToken || loading || txLoading}
               accept=".csv,.xlsx,.xls"
               onChange={handleFileUpload}
               className="mt-3 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 dark:text-slate-200"
@@ -413,6 +454,75 @@ export default function DashboardPage() {
 
       {rows.length > 0 && (
         <div className="mt-8 overflow-x-auto">
+          {batches.length > 0 && (
+            <div className="mb-6 flex flex-col gap-4 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4 dark:border-indigo-900/30 dark:bg-indigo-950/20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-indigo-900 dark:text-indigo-100">
+                    Transaction Batch {currentBatchIndex + 1} of{" "}
+                    {batches.length}
+                  </h3>
+                  <p className="text-sm text-indigo-700/70 dark:text-indigo-300/70">
+                    This batch contains{" "}
+                    {batches[currentBatchIndex].totalWallets} wallets.
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() =>
+                      setCurrentBatchIndex((prev) => Math.max(0, prev - 1))
+                    }
+                    disabled={currentBatchIndex === 0}
+                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50 disabled:opacity-50 hover:text-slate-700"
+                  >
+                    Previous Batch
+                  </button>
+                  <button
+                    onClick={() =>
+                      setCurrentBatchIndex((prev) =>
+                        Math.min(batches.length - 1, prev + 1),
+                      )
+                    }
+                    disabled={currentBatchIndex === batches.length - 1}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    Next Batch
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          <span className="flex items-center justify-between mb-4">
+            <span className="flex items-center gap-2">
+              <label className="text-sm font-medium ">Show</label>
+              <select
+                value={rowsPerPage}
+                onChange={(e) => {
+                  setRowsPerPage(Number(e.target.value));
+                  setInternalPage(0); // Reset internal view when changing size
+                }}
+                className="rounded border dark:bg-black border-slate-300 px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value={10}>10 rows</option>
+                <option value={25}>25 rows</option>
+                <option value={50}>50 rows</option>
+                <option value={100}>100 rows</option>
+                <option value={150}>150 rows</option>
+                <option value={200}>200 rows (Full Batch)</option>
+              </select>
+            </span>
+
+            <span className="text-xs">
+              Displaying{" "}
+              {Math.min(
+                rowsPerPage,
+                batches[currentBatchIndex]?.rows.length || 0,
+              )}{" "}
+              of {batches[currentBatchIndex]?.totalWallets} wallets in this
+              batch
+            </span>
+          </span>
           <table className="min-w-full divide-y divide-slate-200 text-sm">
             <thead>
               <tr>
@@ -424,36 +534,58 @@ export default function DashboardPage() {
             </thead>
 
             <tbody>
-              {validation?.validRows.map((row, index) => (
-                <tr key={index} className="border-t border-slate-200">
-                  <td className="px-4 py-3">{row.Wallet}</td>
-
-                  <td className="px-4 py-3">{row.TokenId}</td>
-
-                  <td className="px-4 py-3">{row.Amount}</td>
-
-                  <td className="px-4 py-3 text-emerald-600">Valid</td>
-                </tr>
-              ))}
-
-              {validation?.invalidRows.map((row, index) => (
-                <tr
-                  key={`invalid-${index}`}
-                  className="border-t border-red-200 bg-red-50 dark:bg-red-900/50"
-                >
-                  <td className="px-4 py-3">{row.Wallet}</td>
-
-                  <td className="px-4 py-3">{row.TokenId}</td>
-
-                  <td className="px-4 py-3">{row.Amount}</td>
-
-                  <td className="px-4 py-3 text-red-600">
-                    {row.errors.join(", ")}
-                  </td>
-                </tr>
-              ))}
+              {batches.length > 0 &&
+                batches[currentBatchIndex]?.rows
+                  .slice(
+                    internalPage * rowsPerPage,
+                    (internalPage + 1) * rowsPerPage,
+                  )
+                  .map((row, index) => (
+                    <tr
+                      key={`${currentBatchIndex}-${index}`}
+                      className="border-t border-slate-200 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                    >
+                      <td className="px-4 py-3 font-mono text-xs">
+                        {row.Wallet}
+                      </td>
+                      <td className="px-4 py-3">{row.TokenId}</td>
+                      <td className="px-4 py-3">{row.Amount}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                          Valid
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
             </tbody>
           </table>
+          {batches[currentBatchIndex]?.rows.length > rowsPerPage && (
+            <div className="flex justify-center gap-4 mt-4 py-2 border-t">
+              <button
+                disabled={internalPage === 0}
+                onClick={() => setInternalPage((p) => p - 1)}
+                className="text-sm text-indigo-600 disabled:text-slate-400"
+              >
+                Previous {rowsPerPage}
+              </button>
+              <span className="text-sm text-slate-500">
+                Page {internalPage + 1} of{" "}
+                {Math.ceil(
+                  batches[currentBatchIndex].rows.length / rowsPerPage,
+                )}
+              </span>
+              <button
+                disabled={
+                  (internalPage + 1) * rowsPerPage >=
+                  batches[currentBatchIndex].rows.length
+                }
+                onClick={() => setInternalPage((p) => p + 1)}
+                className="text-sm text-indigo-600 disabled:text-slate-400"
+              >
+                Next {rowsPerPage}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -482,6 +614,23 @@ export default function DashboardPage() {
                   <p>
                     Total Amount:{" "}
                     <span className="font-medium">{batch.totalAmount}</span>
+                  </p>
+                  <p>
+                    Status:{" "}
+                    <span
+                      className={`font-medium ${
+                        batch.status === "success"
+                          ? "text-emerald-600"
+                          : batch.status === "failed"
+                            ? "text-red-600"
+                            : "text-slate-600"
+                      }`}
+                    >
+                      {batch.status
+                        ? batch.status.charAt(0).toUpperCase() +
+                          batch.status.slice(1)
+                        : "Unknown"}
+                    </span>
                   </p>
                 </div>
               </div>

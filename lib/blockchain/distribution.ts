@@ -4,6 +4,7 @@ import { getBlockchain } from "./provider";
 
 import { getTokenContract } from "./token";
 import { mainnet_bsc, MINIMAL_BEP20_ABI, testnet_bsc } from "./detectToken";
+import { getBNBPrice } from "../utils";
 
 const DISTRIBUTOR_ADDRESS = process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS;
 const DISTRIBUTOR_ABI = [
@@ -83,6 +84,8 @@ export async function approveTokens(
 
   const parsedAmount = ethers.parseUnits(amount, decimals);
 
+  console.log(amount, parsedAmount.toString());
+
   const tx = await tokenContract.approve(
     await distributor.getAddress(),
     parsedAmount,
@@ -102,6 +105,7 @@ export async function executeDistribution(
   signer: ethers.Signer, // Pass the signer directly from your useWallet hook
   decimals: number = 18,
   senderAddress: string,
+  totalAmounts: string, // Total amount for logging or future features, not needed for distribution logic
 ) {
   // 1. Validation Guard
   if (!tokenAddress || !DISTRIBUTOR_ADDRESS) {
@@ -110,7 +114,7 @@ export async function executeDistribution(
     );
   }
 
-  if (recipients.length !== amounts.length) {
+  if (recipients.length !== amounts.length || recipients.length === 0) {
     throw new Error("Recipients and amounts length mismatch.");
   }
 
@@ -127,6 +131,8 @@ export async function executeDistribution(
       ethers.parseUnits(amount, decimals),
     );
 
+    const TotalparedAmount = ethers.parseUnits(totalAmounts, decimals);
+
     // Inside your execution logic (simplified for clarity)
     const totalAmount = parsedAmounts.reduce((a, b) => a + b, BigInt(0));
 
@@ -138,12 +144,15 @@ export async function executeDistribution(
       DISTRIBUTOR_ADDRESS,
     );
 
+    console.log("Current Allowance:", ethers.formatUnits(currentAllowance, decimals));
+    console.log("Total Amount to Distribute:", ethers.formatUnits(totalAmount, decimals));
+
     if (currentAllowance < totalAmount) {
       console.log("Requesting approval...");
       // 2. Trigger Approval Transaction
       const approveTx = await tokenContract.approve(
         DISTRIBUTOR_ADDRESS,
-        totalAmount,
+        TotalparedAmount,
       );
 
       // 3. WAIT for the approval to be mined
@@ -179,7 +188,7 @@ export async function executeDistribution(
 // =========================
 
 // Constants for BNB Chain
-const BNB_PRICE_USD = 600; // You could fetch this from an API later
+const BNB_PRICE_USD = await getBNBPrice(); // You could fetch this from an API later
 
 export async function estimateDistributionGas(
   tokenAddress: string,
