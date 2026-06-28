@@ -79,6 +79,9 @@ export function validateRows(
 
   const invalidRows = validatedRows.filter((r) => !r.isValid);
 
+  console.log(invalidRows);
+
+
   return {
     validRows,
     invalidRows,

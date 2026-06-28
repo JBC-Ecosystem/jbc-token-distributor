@@ -1,3 +1,9 @@
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
 export async function getBNBPrice() {
   const response = await fetch(
     "https://api.coingecko.com/api/v3/simple/price?ids=binancecoin&vs_currencies=usd"
