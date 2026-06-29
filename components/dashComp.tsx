@@ -323,7 +323,7 @@ export default function DashboardPage() {
           </p>
 
           <div className="mt-6 flex flex-col gap-4">
-            <div className="flex gap-4 justify-center items-center">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 justify-center items-center">
               <div className="border p-3 rounded-lg">
                 <div className="">Total Wallets</div>
                 <div>{validation?.totalWallets ?? 0}</div>
