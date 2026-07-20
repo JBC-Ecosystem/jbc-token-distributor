@@ -4,6 +4,7 @@ import { parseFile, ParsedRow } from "@/lib/parser/parserFile";
 import {
   validateRows,
   ValidationSummary,
+  exportDuplicateWalletRows,
 } from "@/lib/validations/validateRows";
 import { createBatches, DistributionBatch } from "@/lib/batch/createBatches";
 import {
@@ -16,7 +17,6 @@ import { waitForTransaction } from "@/lib/blockchain/transactions";
 import { useWallet } from "@/hooks/useWallet";
 import { ethers } from "ethers";
 import { useRouter } from "next/navigation";
-import { set } from "zod";
 
 export default function DashboardPage() {
   const [rows, setRows] = useState<ParsedRow[]>([]);
@@ -642,9 +642,22 @@ export default function DashboardPage() {
   } else if (screen === "Invalid") {
     return (
       <div className="p-5">
-        <button onClick={() => setScreen("default")}>
+        <div className="mb-6 flex items-center justify-between">
+          <button
+            onClick={() => setScreen("default")}
+            className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+          >
             Back
-        </button>
+          </button>
+          <button
+            onClick={() => exportDuplicateWalletRows(validation as ValidationSummary)}
+            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+            disabled={validation?.totalInvalid === 0}
+          >
+            Export
+          </button>
+        </div>
+
         {validation?.totalInvalid && validation.totalInvalid > 0 && (
           <div className="mt-8 overflow-x-auto">
             {validation.totalInvalid > 0 && (

@@ -79,7 +79,6 @@ export function validateRows(
 
   const invalidRows = validatedRows.filter((r) => !r.isValid);
 
-  console.log(invalidRows);
 
 
   return {
@@ -92,4 +91,49 @@ export function validateRows(
 
     duplicates,
   };
+}
+
+export function exportDuplicateWalletRows(validation: ValidationSummary) {
+  const duplicateRows =
+    validation?.invalidRows?.filter((row: any) =>
+      row.errors?.includes("Duplicate wallet"),
+    ) || [];
+
+  if (duplicateRows.length === 0) {
+    alert("No duplicate wallet address rows found.");
+    return;
+  }
+
+  const headers = ["Wallet", "TokenId", "Amount"];
+
+  const csvRows = duplicateRows.map((row: any) => [
+    row.Wallet,
+    row.TokenId,
+    row.Amount,
+  ]);
+
+  const csvContent = [
+    headers.join(","),
+    ...csvRows.map((row: any) =>
+      row
+        .map((value: any) => `"${String(value).replace(/"/g, '""')}"`)
+        .join(","),
+    ),
+  ].join("\n");
+
+  const blob = new Blob([csvContent], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "duplicate-wallet-addresses.csv";
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
 }
