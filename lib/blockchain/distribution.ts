@@ -107,6 +107,7 @@ export async function executeDistribution(
   senderAddress: string,
   totalAmounts: string, // Total amount for logging or future features, not needed for distribution logic
 ) {
+
   // 1. Validation Guard
   if (!tokenAddress || !DISTRIBUTOR_ADDRESS) {
     throw new Error(
@@ -146,13 +147,14 @@ export async function executeDistribution(
 
     console.log("Current Allowance:", ethers.formatUnits(currentAllowance, decimals));
     console.log("Total Amount to Distribute:", ethers.formatUnits(totalAmount, decimals));
+    // console.log("parsed total", ethers.)
 
     if (currentAllowance < totalAmount) {
       console.log("Requesting approval...");
       // 2. Trigger Approval Transaction
       const approveTx = await tokenContract.approve(
         DISTRIBUTOR_ADDRESS,
-        TotalparedAmount,
+        totalAmount,
       );
 
       // 3. WAIT for the approval to be mined
