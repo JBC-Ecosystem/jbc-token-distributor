@@ -18,7 +18,7 @@ export interface DistributionBatch {
   error?: string;
 }
 
-const DEFAULT_BATCH_SIZE = 300;
+const DEFAULT_BATCH_SIZE = 200;
 
 export function createBatches(
   rows: ValidatedRow[],
