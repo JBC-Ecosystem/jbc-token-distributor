@@ -98,91 +98,168 @@ export async function approveTokens(
 // EXECUTE DISTRIBUTION
 // =========================
 
+// export async function executeDistribution(
+//   tokenAddress: string,
+//   recipients: string[],
+//   amounts: string[],
+//   signer: ethers.Signer, // Pass the signer directly from your useWallet hook
+//   decimals: number = 18,
+//   senderAddress: string,
+//   totalAmounts: string, // Total amount for logging or future features, not needed for distribution logic
+// ) {
+
+//   // 1. Validation Guard
+//   if (!tokenAddress || !DISTRIBUTOR_ADDRESS) {
+//     throw new Error(
+//       "Missing contract addresses. Check your environment variables.",
+//     );
+//   }
+
+//   if (recipients.length !== amounts.length || recipients.length === 0) {
+//     throw new Error("Recipients and amounts length mismatch.");
+//   }
+
+//   try {
+//     // 2. Initialize the Distributor Contract with the Signer
+//     const distributor = new Contract(
+//       DISTRIBUTOR_ADDRESS,
+//       DISTRIBUTOR_ABI,
+//       signer,
+//     );
+
+//     // 3. Parse amounts correctly based on token decimals
+//     const parsedAmounts = amounts.map((amount) =>
+//       ethers.parseUnits(amount, decimals),
+//     );
+
+//     const TotalparedAmount = ethers.parseUnits(totalAmounts, decimals);
+
+//     // Inside your execution logic (simplified for clarity)
+//     const totalAmount = parsedAmounts.reduce((a, b) => a + b, BigInt(0));
+
+//     const tokenContract = new Contract(tokenAddress, MINIMAL_BEP20_ABI, signer);
+
+//     // 1. Check current allowance
+//     const currentAllowance = await tokenContract.allowance(
+//       senderAddress,
+//       DISTRIBUTOR_ADDRESS,
+//     );
+
+//     console.log("Current Allowance:", ethers.formatUnits(currentAllowance, decimals));
+//     console.log("Total Amount to Distribute:", ethers.formatUnits(totalAmount, decimals));
+//     // console.log("parsed total", ethers.)
+
+//     if (currentAllowance < totalAmount) {
+//       console.log("Requesting approval...");
+//       // 2. Trigger Approval Transaction
+//       const approveTx = await tokenContract.approve(
+//         DISTRIBUTOR_ADDRESS,
+//         totalAmount,
+//       );
+
+//       // 3. WAIT for the approval to be mined
+//       await approveTx.wait();
+//       console.log("Approval confirmed!");
+//     }
+
+//     // 4. Execute the transaction
+//     console.log("Initiating distribution transaction...");
+//     const tx = await distributor.distribute(
+//       tokenAddress,
+//       recipients,
+//       parsedAmounts,
+//     );
+
+//     // 5. Return the transaction object
+//     // The frontend can then use tx.wait() to show a success message
+//     return tx;
+//   } catch (error: any) {
+//     console.error("Distribution Error:", error);
+
+//     // Friendly error messages for common blockchain failures
+//     if (error.code === "ACTION_REJECTED") {
+//       throw new Error("Transaction was rejected by the user.");
+//     }
+
+//     throw new Error(error.reason || "Failed to execute distribution.");
+//   }
+// }
 export async function executeDistribution(
   tokenAddress: string,
   recipients: string[],
   amounts: string[],
-  signer: ethers.Signer, // Pass the signer directly from your useWallet hook
+  signer: ethers.Signer,
   decimals: number = 18,
   senderAddress: string,
-  totalAmounts: string, // Total amount for logging or future features, not needed for distribution logic
+  totalAmounts: string, // optional: only for logging
 ) {
-
   // 1. Validation Guard
   if (!tokenAddress || !DISTRIBUTOR_ADDRESS) {
-    throw new Error(
-      "Missing contract addresses. Check your environment variables.",
-    );
+    throw new Error("Missing contract addresses. Check your environment variables.");
   }
 
-  if (recipients.length !== amounts.length || recipients.length === 0) {
-    throw new Error("Recipients and amounts length mismatch.");
+  if (recipients.length === 0 || recipients.length !== amounts.length) {
+    throw new Error("Recipients and amounts length mismatch or empty list.");
   }
 
   try {
     // 2. Initialize the Distributor Contract with the Signer
-    const distributor = new Contract(
-      DISTRIBUTOR_ADDRESS,
-      DISTRIBUTOR_ABI,
-      signer,
-    );
+    const distributor = new Contract(DISTRIBUTOR_ADDRESS, DISTRIBUTOR_ABI, signer);
 
     // 3. Parse amounts correctly based on token decimals
     const parsedAmounts = amounts.map((amount) =>
       ethers.parseUnits(amount, decimals),
     );
 
-    const TotalparedAmount = ethers.parseUnits(totalAmounts, decimals);
+    // Optional: only if you need it for logging
+    const totalParsedAmountFromInput = ethers.parseUnits(totalAmounts, decimals);
 
-    // Inside your execution logic (simplified for clarity)
-    const totalAmount = parsedAmounts.reduce((a, b) => a + b, BigInt(0));
-
-    const tokenContract = new Contract(tokenAddress, MINIMAL_BEP20_ABI, signer);
-
-    // 1. Check current allowance
-    const currentAllowance = await tokenContract.allowance(
-      senderAddress,
-      DISTRIBUTOR_ADDRESS,
+    // 4. Compute total from parsedAmounts (this is what you actually use)
+    const totalAmount = parsedAmounts.reduce(
+      (a, b) => a + b,
+      BigInt(0),
     );
 
-    console.log("Current Allowance:", ethers.formatUnits(currentAllowance, decimals));
-    console.log("Total Amount to Distribute:", ethers.formatUnits(totalAmount, decimals));
-    // console.log("parsed total", ethers.)
+const tokenContract = new Contract(tokenAddress, MINIMAL_BEP20_ABI, signer);
+// 5. Check current allowance
+const currentAllowance = await tokenContract.allowance(
+  senderAddress,
+  DISTRIBUTOR_ADDRESS,
+);
 
-    if (currentAllowance < totalAmount) {
-      console.log("Requesting approval...");
-      // 2. Trigger Approval Transaction
-      const approveTx = await tokenContract.approve(
-        DISTRIBUTOR_ADDRESS,
-        totalAmount,
-      );
+console.log("Current Allowance:", ethers.formatUnits(currentAllowance, decimals));
+console.log("Total Amount to Distribute:", ethers.formatUnits(totalAmount, decimals));
+console.log("Total Amount From Input:", ethers.formatUnits(totalParsedAmountFromInput, decimals));
 
-      // 3. WAIT for the approval to be mined
-      await approveTx.wait();
-      console.log("Approval confirmed!");
-    }
+// 6. Request approval if needed
+if (currentAllowance < totalAmount) {
+  console.log("Requesting approval...");
+  const approveTx = await tokenContract.approve(
+    DISTRIBUTOR_ADDRESS,
+    totalAmount,
+  );
+  await approveTx.wait();
+  console.log("Approval confirmed!");
+}
 
-    // 4. Execute the transaction
-    console.log("Initiating distribution transaction...");
-    const tx = await distributor.distribute(
-      tokenAddress,
-      recipients,
-      parsedAmounts,
-    );
+// 7. Execute the distribution
+console.log("Initiating distribution transaction...");
+const tx = await distributor.distribute(
+  tokenAddress,
+  recipients,
+  parsedAmounts,
+);
 
-    // 5. Return the transaction object
-    // The frontend can then use tx.wait() to show a success message
-    return tx;
-  } catch (error: any) {
-    console.error("Distribution Error:", error);
+return tx; // caller does tx.wait()
+} catch (error: any) {
+console.error("Distribution Error:", error);
+if (error.code === "ACTION_REJECTED") {
+  throw new Error("Transaction was rejected by the user.");
+}
 
-    // Friendly error messages for common blockchain failures
-    if (error.code === "ACTION_REJECTED") {
-      throw new Error("Transaction was rejected by the user.");
-    }
+throw new Error(error.reason || error.message || "Failed to execute distribution.");
 
-    throw new Error(error.reason || "Failed to execute distribution.");
-  }
+}
 }
 
 // =========================
