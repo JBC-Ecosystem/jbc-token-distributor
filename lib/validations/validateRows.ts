@@ -43,12 +43,12 @@ export function validateRows(
     }
 
     // Duplicate detection
-    if (walletSet.has(wallet)) {
-      errors.push("Duplicate wallet");
-      duplicates++;
-    } else {
-      walletSet.add(wallet);
-    }
+    // if (walletSet.has(wallet)) {
+    //   errors.push("Duplicate wallet");
+    //   duplicates++;
+    // } else {
+    //   walletSet.add(wallet);
+    // }
 
     // Token validation
     if (!SUPPORTED_TOKENS_ID.includes(token)) {
